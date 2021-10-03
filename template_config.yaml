@@ -1,0 +1,13 @@
+# copy to config.yaml
+discord_bot_token: '...'
+
+az_tenant_id: '...'
+az_client_id: '...'
+az_client_secret: '...'
+az_subscription_id: '...'
+
+bot_name: '...'
+az_resource_group: ...
+az_vm: ...
+vm_name: '...'
+channel_id: 000

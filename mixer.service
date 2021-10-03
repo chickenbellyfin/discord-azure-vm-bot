@@ -1,0 +1,8 @@
+[Unit]
+Description=NA Mixer Bot
+
+[Service]
+ExecStart=/usr/bin/python3 /home/ta/mixer-server-bot/app.py
+
+[Install]
+WantedBy=multi-user.target
