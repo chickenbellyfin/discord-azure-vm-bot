@@ -47,7 +47,7 @@ power_state_map = {
   'starting': {'starting'}
 }
 
-def mixer_power_state():
+def vm_power_state():
   instance_view = az_compute_client.virtual_machines.instance_view(az_resource_group, az_vm)
   for status in instance_view.statuses:
     if status.code.startswith('PowerState/'):
@@ -72,11 +72,11 @@ async def send_help_text(message):
   )
 
 async def command_status(message):
-  status = mixer_power_state()
+  status = vm_power_state()
   await message.channel.send(f'{vm_name} Status: {status}')
 
 async def command_start(message):
-  status = mixer_power_state()
+  status = vm_power_state()
   if status == 'running':
     await message.channel.send(f"{vm_name} is already running")
   elif status == 'starting':
@@ -87,7 +87,7 @@ async def command_start(message):
     await command_status(message)
 
 async def command_restart(message):
-    status = mixer_power_state()
+    status = vm_power_state()
     if status == 'running' or status == 'starting':
       await message.channel.send(f"Restarting {vm_name}...")
       result = az_compute_client.virtual_machines.begin_restart(az_resource_group, az_vm).result()
