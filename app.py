@@ -1,10 +1,17 @@
 import logging
-import re
 import yaml
+import shlex
 
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 import discord
+
+EYES='👀'
+CHECK='✅'
+GREEN_CIRCLE='🟢'
+RED_CIRCLE='🔴'
+YELLOW_CIRCLE='🟡'
+
 
 logging.basicConfig(
   level=logging.INFO,
@@ -36,9 +43,12 @@ az_compute_client = ComputeManagementClient(az_credential, az_subscription_id)
 
 discord_client = discord.Client()
 
-az_resource_group = config['az_resource_group']
-az_vm = config['az_vm']
-vm_name = config['vm_name']
+
+vms = {}
+for vm_config in config['vms']:
+  key = list(vm_config.keys())[0]
+  vms[key] = vm_config[key]
+configured_vms_str = ', '.join(vms.keys())
 
 # Map azure power states to simplified power state
 power_state_map = {
@@ -47,8 +57,14 @@ power_state_map = {
   'starting': {'starting'}
 }
 
-def vm_power_state():
-  instance_view = az_compute_client.virtual_machines.instance_view(az_resource_group, az_vm)
+power_state_to_emoji = {
+  'stopped': RED_CIRCLE,
+  'running': GREEN_CIRCLE,
+  'starting': YELLOW_CIRCLE
+}
+
+def vm_power_state(vm):
+  instance_view = az_compute_client.virtual_machines.instance_view(vm['az_resource_group'], vm['az_vm'])
   for status in instance_view.statuses:
     if status.code.startswith('PowerState/'):
       logging.info(f'Power state: {status.code}')
@@ -61,43 +77,68 @@ def vm_power_state():
   logging.error("No power state in statuses")
   return 'unknown'
 
-async def send_help_text(message):
+def get_member():
+  return discord_client.get_channel(discord_bot_channel_id).guild.get_member(discord_client.user.id)
+
+async def send_help_text(message, args):
   await message.channel.send(f"""
     Usage: @{discord_client.user.display_name} <command>
-    **status**: Current server running status
-    **start**: Start the {vm_name} server
-    **restart**: Restart the {vm_name} server
+    **status**: Check status of all servers
+    **start** <server>: Start a server
+    **restart** <server>: Restart a server
     **help**: this
+
+    Available Servers: {configured_vms_str}
     """
   )
 
-async def command_status(message):
-  status = vm_power_state()
-  await message.channel.send(f'{vm_name} Status: {status}')
+async def command_status(message, args):
+  status_message=""
+  for vm_key, vm in vms.items():
+    status = vm_power_state(vm)
+    emoji = power_state_to_emoji[status]
+    status_message += f"{emoji} {vm['name']} ({vm_key})\n"
 
-async def command_start(message):
-  status = vm_power_state()
+  await message.channel.send(f'```{status_message}```')
+
+async def command_start(message: discord.Message, args):
+  if len(args) < 1 or args[0] not in vms.keys():
+    await message.reply(f'Must specify one of: {configured_vms_str}')
+    return
+
+  vm = vms[args[0]]
+  status = vm_power_state(vm)
   if status == 'running':
-    await message.channel.send(f"{vm_name} is already running")
+    await message.reply(f"{vm['name']} is already running")
   elif status == 'starting':
-    await message.channel.send(f"{vm_name} is already starting")
+    await message.reply(f"{vm['name']} is already starting")
   else:    
-    await message.channel.send(f"Starting {vm_name}...")
-    result = az_compute_client.virtual_machines.begin_start(az_resource_group, az_vm).wait()
-    await command_status(message)
+    await message.add_reaction(EYES)
+    result = az_compute_client.virtual_machines.begin_start(vm['az_resource_group'], vm['az_vm']).wait()
+    await message.remove_reaction(EYES, get_member())
+    await message.add_reaction(CHECK)
 
-async def command_restart(message):
-    status = vm_power_state()
+
+async def command_restart(message, args):
+    if len(args) < 1 or args[0] not in vms.keys():
+      await message.reply(f'Must specify one of: {configured_vms_str}')
+      return
+
+    vm = vms[args[0]]
+    status = vm_power_state(vm)
     if status == 'running' or status == 'starting':
-      await message.channel.send(f"Restarting {vm_name}...")
-      result = az_compute_client.virtual_machines.begin_restart(az_resource_group, az_vm).result()
-      await command_status(message)
+      await message.add_reaction(EYES)
+      result = az_compute_client.virtual_machines.begin_restart(vm['az_resource_group'], vm['az_vm']).result()
+      await message.remove_reaction(EYES, get_member())
+      await message.add_reaction(CHECK)
     else:
-      await message.channel.send(f"{vm_name} is not currently running.")
+      await message.channel.send(f"{vm['name']} is not currently running.")
+
 
 @discord_client.event
 async def on_ready():
   logging.info(f'Connected to discord as {discord_client.user}')
+
 
 @discord_client.event
 async def on_message(message):
@@ -108,17 +149,19 @@ async def on_message(message):
   
   if bot_mentioned and message.channel.id == discord_bot_channel_id:
     logging.info(f"Bot mentioned: '{message.content}'")
-    tokens = re.split('\s+', message.content)
-    if len(tokens) == 2:
+    tokens = shlex.split(message.content)
+    
+    if len(tokens) > 1:
       command = tokens[1]
+      args = tokens[2:]
       if command == 'help':
-        await send_help_text(message)
+        await send_help_text(message, args)
       elif command == 'status':
-        await command_status(message)
+        await command_status(message, args)
       elif command == 'start':
-        await command_start(message)
+        await command_start(message, args)
       elif command == 'restart':
-        await command_restart(message)
+        await command_restart(message, args)
     else:
       await send_help_text(message)
 

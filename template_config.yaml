@@ -6,8 +6,14 @@ az_client_id: '...'
 az_client_secret: '...'
 az_subscription_id: '...'
 
-bot_name: '...'
-az_resource_group: ...
-az_vm: ...
-vm_name: '...'
 channel_id: 000
+
+vms:
+  - server1: 
+      az_resource_group: az-resource-group
+      az_vm: az-vm-name
+      name: 'Server Name'
+  # - server2: # Control multiple servers...
+  #     az_resource_group: server-2-rg
+  #     az_vm: server-2-vm
+  #     name: 'Server 2 Name'
