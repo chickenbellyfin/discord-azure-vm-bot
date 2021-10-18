@@ -4,6 +4,9 @@ A Discord bot which can start and restart azure VMs
 ![example](/docs/example.png)
 
 ## Setup Instructions
+
+- First, copy template_config.yaml to config.yaml. All configuration/secrets will go in config.yaml.
+
 ### Create Azure Service Principal
   - From Azure Portal, go to Azure Active Directory -> App registrations
   - Click "New registration", enter a name, and click "Register"
