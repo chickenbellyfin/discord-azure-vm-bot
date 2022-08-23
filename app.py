@@ -143,12 +143,8 @@ async def command_stop(message, args):
 
     vm = vms[args[0]]
     status = vm_power_state(vm)
-    if status == 'starting':
-        await message.reply(f"{vm['name']} is just starting")
-    elif status =='deallocated' or status == 'stopped':
+    if status == 'stopped':
         await message.reply(f"{vm['name']} is already stopped")
-    elif status == 'deallocating' or status == 'stopping':
-        await message.reply(f"{vm['name']} is already stopping")
     else:
         await message.add_reaction(EYES)
         result = az_compute_client.virtual_machines.begin_deallocate(vm['az_resource_group'], vm['az_vm']).result()
