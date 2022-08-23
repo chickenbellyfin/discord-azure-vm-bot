@@ -41,7 +41,8 @@ az_subscription_id = config['az_subscription_id']
 az_credential = ClientSecretCredential(az_tenant_id, az_client_id, az_client_secret)
 az_compute_client = ComputeManagementClient(az_credential, az_subscription_id)
 
-discord_client = discord.Client()
+intents = discord.Intents.default()
+discord_client = discord.Client(intents=intents)
 
 
 vms = {}
@@ -85,6 +86,7 @@ async def send_help_text(message, args):
     Usage: @{discord_client.user.display_name} <command>
     **status**: Check status of all servers
     **start** <server>: Start a server
+    **stop** <server>: Stop a server
     **restart** <server>: Restart a server
     **help**: this
 
@@ -134,6 +136,20 @@ async def command_restart(message, args):
     else:
       await message.channel.send(f"{vm['name']} is not currently running.")
 
+async def command_stop(message, args):
+    if len(args) < 1 or args[0] not in vms.keys():
+      await message.reply(f'Must specify one of: {configured_vms_str}')
+      return
+
+    vm = vms[args[0]]
+    status = vm_power_state(vm)
+    if status == 'stopped':
+        await message.reply(f"{vm['name']} is already stopped")
+    else:
+        await message.add_reaction(EYES)
+        result = az_compute_client.virtual_machines.begin_deallocate(vm['az_resource_group'], vm['az_vm']).result()
+        await message.remove_reaction(EYES, get_member())
+        await message.add_reaction(CHECK)
 
 @discord_client.event
 async def on_ready():
@@ -160,6 +176,8 @@ async def on_message(message):
         await command_status(message, args)
       elif command == 'start':
         await command_start(message, args)
+      elif command == 'stop':
+        await command_stop(message, args)
       elif command == 'restart':
         await command_restart(message, args)
     else:
